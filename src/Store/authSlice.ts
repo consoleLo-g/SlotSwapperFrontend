@@ -3,18 +3,30 @@ import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
 import { loginApi, registerApi, meApi } from "../api/authApi";
 import type { AuthState } from "../Types/Auth";
 
-const initialState: AuthState = { token: localStorage.getItem("token"), user: null };
+const initialState: AuthState = { 
+  token: localStorage.getItem("token"), 
+  user: null 
+};
 
-export const login = createAsyncThunk("auth/login", async ({ email, password }: { email: string; password: string }, thunkAPI) => {
-  const res = await loginApi(email, password);
-  return res.data;
-});
+// ✅ Login thunk
+export const login = createAsyncThunk(
+  "auth/login",
+  async ({ email, password }: { email: string; password: string }, thunkAPI) => {
+    const res = await loginApi(email, password);
+    return res.data; // backend returns the JWT string directly
+  }
+);
 
-export const register = createAsyncThunk("auth/register", async ({ name, email, password }: { name: string; email: string; password: string }) => {
-  const res = await registerApi(name, email, password);
-  return res.data;
-});
+// ✅ Register thunk
+export const register = createAsyncThunk(
+  "auth/register",
+  async ({ name, email, password }: { name: string; email: string; password: string }) => {
+    const res = await registerApi(name, email, password);
+    return res.data;
+  }
+);
 
+// ✅ Fetch current user
 export const fetchMe = createAsyncThunk("auth/me", async () => {
   const res = await meApi();
   return res.data;
@@ -32,12 +44,13 @@ const slice = createSlice({
   },
   extraReducers: (builder) => {
     builder.addCase(login.fulfilled, (state, action) => {
-      state.token = action.payload.token;
-      localStorage.setItem("token", action.payload.token);
-      state.user = action.payload.user ?? null;
+      const token = action.payload; // ✅ action.payload is just the JWT string
+      state.token = token;
+      localStorage.setItem("token", token);
+      state.user = null; // fetchMe can be called separately to populate user info
     });
     builder.addCase(register.fulfilled, (state) => {
-      // registration successful, login separately
+      // registration successful, login separately if needed
     });
     builder.addCase(fetchMe.fulfilled, (state, action) => {
       state.user = action.payload;

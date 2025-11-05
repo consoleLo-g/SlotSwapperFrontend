@@ -1,9 +1,25 @@
 // src/api/eventApi.ts
-import api from "./axios";
+import api from "./axios"; // ✅ use the interceptor version
 import type { AppEvent } from "../Types/Event";
 
-export const fetchMyEventsApi = () => api.get<AppEvent[]>("/events/my-events");
-export const createEventApi = (payload: Partial<AppEvent>) => api.post<AppEvent>("/events", payload);
+// Fetch events for the current user
+export const fetchMyEventsApi = (userId: string) =>
+  api.get<AppEvent[]>(`/events/my-events?userId=${userId}`);
+
+// Create a new event
+export const createEventApi = (payload: {
+  userId: string;
+  title: string;
+  description?: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+}) => api.post<AppEvent>("/events/create", payload); // ✅ now sends JWT
+
+// Update an event by ID
 export const updateEventApi = (id: string, payload: Partial<AppEvent>) =>
   api.put<AppEvent>(`/events/${id}`, payload);
-export const makeSwappableApi = (id: string) => api.put<AppEvent>(`/events/${id}/make-swappable`);
+
+// Make an event swappable
+export const makeSwappableApi = (id: string) =>
+  api.put<AppEvent>(`/events/${id}/make-swappable`);
