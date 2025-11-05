@@ -1,17 +1,20 @@
 // src/api/axios.ts
 import axios from "axios";
 
-const BASE = (import.meta.env.VITE_API_URL as string) || "/api";
+const BASE = import.meta.env.VITE_API_URL;
 
 export const api = axios.create({
   baseURL: BASE,
-  withCredentials: true,
+  withCredentials: false,
   headers: { "Content-Type": "application/json" },
 });
 
+// ✅ attach token
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem("token");
-  if (token && config.headers) config.headers.Authorization = `Bearer ${token}`;
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
   return config;
 });
 
