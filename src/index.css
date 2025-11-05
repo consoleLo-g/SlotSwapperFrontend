@@ -1,3 +1,8 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+.rbc-day-slot .rbc-events-container .rbc-event {
+  border: none;
+  box-shadow: none;
+}
