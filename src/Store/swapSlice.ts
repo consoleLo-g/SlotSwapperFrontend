@@ -7,12 +7,30 @@ import {
   respondSwapRequestApi,
   getAllSwapRequestsApi
 } from "../api/swapApi";
+import { fetchUserById } from "../api/userApi"; // ✅ import the user API
 
-export const fetchMarketplace = createAsyncThunk("swap/fetchMarketplace", async (currentUserId: string) => {
-  const allEvents = await getAllEventsApi();
-  // Only swappable events and not your own
-  return allEvents.filter((ev: any) => ev.swappable && ev.userId !== currentUserId);
-});
+export const fetchMarketplace = createAsyncThunk(
+  "swap/fetchMarketplace",
+  async (currentUserId: string) => {
+    const allEvents = await getAllEventsApi();
+    // Only swappable events and not your own
+    const swappable = allEvents.filter((ev: any) => ev.swappable && ev.userId !== currentUserId);
+
+    // Attach userName to each event
+    const enriched = await Promise.all(
+      swappable.map(async (ev: any) => {
+        try {
+          const res = await fetchUserById(ev.userId);
+          return { ...ev, userName: res.data.name };
+        } catch {
+          return { ...ev, userName: ev.userId }; // fallback
+        }
+      })
+    );
+
+    return enriched;
+  }
+);
 
 export const fetchMyEvents = createAsyncThunk("swap/fetchMyEvents", async (userId: string) => {
   return await getUserEventsApi(userId);
@@ -22,14 +40,12 @@ export const makeEventSwappable = createAsyncThunk("swap/makeSwappable", async (
   return await makeEventSwappableApi(id);
 });
 
-export const createSwapRequest = createAsyncThunk("swap/createRequest", async (payload: {
-  requesterId: string;
-  eventId: string;
-  requestedSlot: string;
-  offeredSlot: string;
-}) => {
-  return await createSwapRequestApi(payload);
-});
+export const createSwapRequest = createAsyncThunk(
+  "swap/createRequest",
+  async (payload: { requesterId: string; eventId: string; requestedSlot: string; offeredSlot: string }) => {
+    return await createSwapRequestApi(payload);
+  }
+);
 
 export const fetchSwapRequests = createAsyncThunk("swap/fetchRequests", async (currentUserId: string) => {
   const allRequests = await getAllSwapRequestsApi();
@@ -38,9 +54,12 @@ export const fetchSwapRequests = createAsyncThunk("swap/fetchRequests", async (c
   return { incoming, outgoing };
 });
 
-export const respondSwapRequest = createAsyncThunk("swap/respondRequest", async (payload: { id: string; accept: boolean }) => {
-  return await respondSwapRequestApi(payload);
-});
+export const respondSwapRequest = createAsyncThunk(
+  "swap/respondRequest",
+  async (payload: { id: string; accept: boolean }) => {
+    return await respondSwapRequestApi(payload);
+  }
+);
 
 interface SwapState {
   marketplace: any[];
@@ -61,7 +80,7 @@ const slice = createSlice({
       .addCase(fetchMarketplace.rejected, (s) => { s.loading = false; })
 
       .addCase(fetchMyEvents.fulfilled, (s, a) => { s.myEvents = a.payload; })
-      
+
       .addCase(fetchSwapRequests.fulfilled, (s, a) => { s.incoming = a.payload.incoming; s.outgoing = a.payload.outgoing; });
   }
 });

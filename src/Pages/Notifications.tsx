@@ -1,4 +1,3 @@
-// src/pages/Notifications.tsx
 import { useEffect } from "react";
 import NavBar from "../Components/NavBar";
 import { useAppDispatch, useAppSelector } from "../hooks";
@@ -6,8 +5,6 @@ import { fetchSwapRequests, respondSwapRequest } from "../Store/swapSlice";
 
 export default function Notifications() {
   const dispatch = useAppDispatch();
-
-  // Use auth slice to get the current logged-in user
   const currentUser = useAppSelector((s) => s.auth.user);
   const incoming = useAppSelector((s) => s.swap.incoming);
   const outgoing = useAppSelector((s) => s.swap.outgoing);
@@ -21,7 +18,7 @@ export default function Notifications() {
   const handleRespond = (id: string, accept: boolean) => {
     if (!currentUser?.id) return;
     dispatch(respondSwapRequest({ id, accept })).then(() =>
-      dispatch(fetchSwapRequests(currentUser.id))
+      dispatch(fetchSwapRequests(currentUser.id)) // ✅ Refresh both incoming and outgoing after responding
     );
   };
 
@@ -36,7 +33,7 @@ export default function Notifications() {
             {incoming.length === 0 ? (
               <div className="text-gray-500">No incoming</div>
             ) : (
-              incoming.map((r) => (
+              incoming.map(r => (
                 <div key={r.id} className="p-3 bg-white/90 rounded shadow flex justify-between items-center">
                   <div>
                     <div className="font-bold">{r.fromUserName || r.requesterId} offers swap</div>
@@ -59,7 +56,7 @@ export default function Notifications() {
             {outgoing.length === 0 ? (
               <div className="text-gray-500">No outgoing</div>
             ) : (
-              outgoing.map((r) => (
+              outgoing.map(r => (
                 <div key={r.id} className="p-3 bg-white/90 rounded shadow">
                   <div className="font-bold">To: {r.toUserName || r.requestedSlotOwnerId}</div>
                   <div className="text-sm text-gray-600">{r.status}</div>
