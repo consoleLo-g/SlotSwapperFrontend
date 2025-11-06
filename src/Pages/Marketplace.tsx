@@ -1,45 +1,71 @@
-// src/pages/Marketplace.tsx
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import NavBar from "../Components/NavBar";
-import { useAppDispatch, useAppSelector } from "../hooks";
-import { fetchMarketplace } from "../Store/swapSlice";
+import EventCard from "../Components/EventCard";
 import SwapModal from "../Components/SwapModal";
+import { useAppDispatch, useAppSelector } from "../hooks";
+import { fetchMarketplace, createSwapRequest } from "../Store/swapSlice";
 
 export default function Marketplace() {
   const dispatch = useAppDispatch();
   const marketplace = useAppSelector((s) => s.swap.marketplace);
   const loading = useAppSelector((s) => s.swap.loading);
+  const myEvents = useAppSelector((s) => s.swap.myEvents);
+  
   const [opened, setOpened] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState<any | null>(null);
 
-  useEffect(() => { dispatch(fetchMarketplace()); }, [dispatch]);
+  const currentUserId = "690b22675a37bdaa9ae7bc5d"; // Replace with actual logged-in user
+
+  useEffect(() => {
+    dispatch(fetchMarketplace(currentUserId));
+  }, [dispatch]);
+
+  const handleRequestSwap = (toSlotId: string, fromSlotId: string) => {
+    dispatch(createSwapRequest({
+      requesterId: currentUserId,
+      eventId: toSlotId,
+      requestedSlot: toSlotId,
+      offeredSlot: fromSlotId
+    })).then(() => {
+      setOpened(false);
+      alert("Swap request sent!");
+    });
+  };
 
   return (
     <div>
       <NavBar />
       <div className="max-w-7xl mx-auto p-6">
         <h1 className="text-2xl font-bold mb-4">Marketplace</h1>
-        {loading ? <div>Loading...</div> : (
+        {loading ? <div>Loading...</div> :
           <div className="grid gap-4">
-            {marketplace.map((slot: any) => (
-              <div key={slot.id} className="p-4 bg-white/90 rounded shadow flex justify-between items-center">
-                <div>
-                  <div className="font-semibold">{slot.title}</div>
-                  <div className="text-sm text-gray-600">{new Date(slot.start).toLocaleString()}</div>
-                </div>
-                <div>
-                  <button className="px-3 py-1 bg-gradient-to-r from-pink-500 to-red-500 text-white rounded"
-                    onClick={() => { setSelectedSlot(slot); setOpened(true); }}>
-                    Request Swap
-                  </button>
-                </div>
-              </div>
+            {marketplace.map((slot) => (
+              <EventCard
+  key={slot.id}
+  ev={slot}
+  statusColor="#e0f7fa"
+  showTitle={false} // hide task/title
+>
+  <div className="font-bold">{slot.userName}</div>
+  <button
+    className="mt-2 px-3 py-1 bg-gradient-to-r from-pink-500 to-red-500 text-white rounded"
+    onClick={() => { setSelectedSlot(slot); setOpened(true); }}
+  >
+    Request Swap
+  </button>
+</EventCard>
             ))}
           </div>
-        )}
+        }
       </div>
 
-      <SwapModal open={opened} onClose={() => setOpened(false)} marketplaceSlot={selectedSlot} mySwappables={[]} onRequest={() => { alert("Request sent (stub)"); }} />
+      <SwapModal
+        open={opened}
+        onClose={() => setOpened(false)}
+        marketplaceSlot={selectedSlot}
+        mySwappables={myEvents.filter(ev => ev.swappable)}
+        onRequest={handleRequestSwap}
+      />
     </div>
   );
 }
