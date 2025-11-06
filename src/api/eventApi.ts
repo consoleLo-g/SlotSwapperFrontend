@@ -4,17 +4,13 @@ import type { AppEvent } from "../Types/Event";
 
 // Fetch events for the current user
 export const fetchMyEventsApi = (userId: string) =>
-  api.get<AppEvent[]>(`/events/my-events?userId=${userId}`);
+  api.get<AppEvent[]>(`/events/user?userId=${userId}`);
 
 // Create a new event
-export const createEventApi = (payload: {
-  userId: string;
-  title: string;
-  description?: string;
-  date: string;
-  startTime: string;
-  endTime: string;
-}) => api.post<AppEvent>("/events/create", payload); // ✅ now sends JWT
+export const createEventApi = (payload: any) =>
+  api.post("/events/create", payload, {
+    headers: { "Content-Type": "application/json" }
+  });
 
 // Update an event by ID
 export const updateEventApi = (id: string, payload: Partial<AppEvent>) =>

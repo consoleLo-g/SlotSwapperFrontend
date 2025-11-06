@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 
 interface AddEventModalProps {
   open: boolean;
@@ -78,7 +78,7 @@ export default function AddEventModal({ open, onClose, onCreate, defaultDate }: 
           </button>
           <button
             onClick={handleSubmit}
-            className="px-4 py-2 bg-gradient-to-r from-indigo-500 to-pink-500 text-white rounded-lg hover:scale-105 transition-transform"
+            className="px-4 py-2 bg-linear-to-r from-indigo-500 to-pink-500 text-white rounded-lg hover:scale-105 transition-transform"
           >
             Add
           </button>

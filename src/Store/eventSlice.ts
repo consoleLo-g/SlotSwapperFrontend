@@ -13,8 +13,21 @@ import { format } from "date-fns";
 export const fetchEvents = createAsyncThunk("events/fetchAll", async () => {
   const userId = localStorage.getItem("userId");
   if (!userId) throw new Error("User not logged in");
+
   const res = await fetchMyEventsApi(userId);
-  return res.data as AppEvent[];
+
+  // ✅ Convert backend format → frontend format
+  return res.data.map((e: any) => ({
+    id: e.id,
+    title: e.title,
+    description: e.description,
+    swappable: e.swappable,
+    userId: e.userId,
+
+    // ✅ Build ISO datetime string
+    start: new Date(`${e.date}T${e.startTime}`).toISOString(),
+    end: new Date(`${e.date}T${e.endTime}`).toISOString(),
+  })) as AppEvent[];
 });
 
 // Create a new event
@@ -24,7 +37,7 @@ export const createEvent = createAsyncThunk(
     title,
     start,
     end,
-    description,
+    description = "",
   }: {
     title: string;
     start: Date;
@@ -33,13 +46,20 @@ export const createEvent = createAsyncThunk(
   }) => {
     const userId = localStorage.getItem("userId") || "";
 
-    // Convert Date objects to backend strings
-    const date = format(start, "dd-MM-yyyy");       // e.g., "05-11-2025"
-    const startTime = format(start, "HH:mm");       // e.g., "17:00"
-    const endTime = format(end, "HH:mm");           // e.g., "19:00"
+    const date = format(start, "yyyy-MM-dd");
+    const startTime = format(start, "HH:mm");
+    const endTime = format(end, "HH:mm");
 
-    const res = await createEventApi({ userId, title, description, date, startTime, endTime });
-    return res.data as AppEvent;
+    const res = await createEventApi({
+      userId,
+      title,
+      description,
+      date,
+      startTime,
+      endTime,
+    });
+
+    return res.data;
   }
 );
 
@@ -76,8 +96,24 @@ const slice = createSlice({
 
     // Create event
     builder.addCase(createEvent.fulfilled, (state, action) => {
-      state.items.push(action.payload);
-    });
+  const e = action.payload;
+
+  state.items.push({
+    id: e.id,
+    title: e.title,
+    description: e.description,
+    swappable: e.swappable,
+    userId: e.userId,
+
+    // ✅ Convert backend fields → ISO
+    start: new Date(`${e.date}T${e.startTime}`).toISOString(),
+    end: new Date(`${e.date}T${e.endTime}`).toISOString(),
+
+    date: e.date,
+    startTime: e.startTime,
+    endTime: e.endTime,
+  });
+});
 
     // Make swappable
     builder.addCase(makeSwappable.fulfilled, (state, action) => {
