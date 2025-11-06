@@ -38,15 +38,17 @@ const slice = createSlice({
   reducers: {
     logout(state) {
       localStorage.removeItem("token");
+      localStorage.removeItem("userId");
       state.token = null;
       state.user = null;
     },
   },
   extraReducers: (builder) => {
     builder.addCase(login.fulfilled, (state, action) => {
-      const token = action.payload; // ✅ action.payload is just the JWT string
+      const {token, userId} = action.payload; // ✅ action.payload is just the JWT string
       state.token = token;
       localStorage.setItem("token", token);
+      localStorage.setItem("userId", userId);
       state.user = null; // fetchMe can be called separately to populate user info
     });
     builder.addCase(register.fulfilled, (state) => {

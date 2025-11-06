@@ -13,7 +13,6 @@ import { fetchEvents, makeSwappable, createEvent } from "../Store/eventSlice";
 import EventCard from "../Components/EventCard";
 import NavBar from "../Components/NavBar";
 import AddEventModal from "../Components/AddEventModal";
-import type { AppEvent } from "../Types/Event";
 
 const locales = { "en-US": enUS };
 const localizer = dateFnsLocalizer({ format, parse, startOfWeek, getDay, locales });

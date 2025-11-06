@@ -16,7 +16,7 @@ export function loginApi(email: string, password: string) {
 }
 
 export function registerApi(name: string, email: string, password: string) {
-  return api.post("/auth/register", null, {
+  return api.post("/auth/register", {}, {
     params: { name, email, password },
   });
 }
