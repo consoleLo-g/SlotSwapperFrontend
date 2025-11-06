@@ -2,76 +2,116 @@ import { useEffect, useState } from "react";
 import NavBar from "../Components/NavBar";
 import EventCard from "../Components/EventCard";
 import { useAppDispatch, useAppSelector } from "../hooks";
-import { fetchMarketplace, createSwapRequest, fetchMyEvents, fetchSwapRequests } from "../Store/swapSlice";
+import {
+  fetchMarketplace,
+  createSwapRequest,
+  fetchMyEvents,
+  fetchSwapRequests,
+} from "../Store/swapSlice";
 import { fetchUserById } from "../api/userApi";
 
 export default function Marketplace() {
   const dispatch = useAppDispatch();
-  const marketplace = useAppSelector((s) => s.swap.marketplace);
   const loading = useAppSelector((s) => s.swap.loading);
   const myEvents = useAppSelector((s) => s.swap.myEvents);
   const currentUserId = useAppSelector((s) => s.auth.user?.id);
+  const outgoing = useAppSelector((s) => s.swap.outgoing);
 
-  const [loadingSwap, setLoadingSwap] = useState(false);
   const [eventsWithNames, setEventsWithNames] = useState<any[]>([]);
   const [userCache, setUserCache] = useState<Record<string, string>>({});
+  const [loadingSwap, setLoadingSwap] = useState(false);
 
-  useEffect(() => {
+  // Format date/time
+  const formatTime = (dateStr: string, timeStr: string) => {
+    if (!dateStr || !timeStr) return "N/A";
+    const d = new Date(`${dateStr}T${timeStr}`);
+    return isNaN(d.getTime())
+      ? "N/A"
+      : d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  };
+
+  // Load marketplace events
+  const loadMarketplace = async () => {
     if (!currentUserId) return;
 
-    const loadMarketplace = async () => {
-      // Fetch my events first
-      await dispatch(fetchMyEvents(currentUserId));
-      const allEvents: any[] = await dispatch(fetchMarketplace(currentUserId)).unwrap();
+    // 1. Fetch my events
+    await dispatch(fetchMyEvents(currentUserId));
 
-      // Map usernames using cache
-      const namesCache = { ...userCache };
-      const eventsMapped = await Promise.all(
-        allEvents.map(async (ev) => {
-          if (!namesCache[ev.userId]) {
-            try {
-              const userRes = await fetchUserById(ev.userId);
-              namesCache[ev.userId] = userRes.data?.name || "Unknown User";
-            } catch {
-              namesCache[ev.userId] = "Unknown User";
-            }
+    // 2. Fetch swap requests
+    await dispatch(fetchSwapRequests(currentUserId));
+
+    // 3. Fetch all marketplace events
+    const allEvents: any[] = await dispatch(fetchMarketplace(currentUserId)).unwrap();
+
+    // 4. Filter:
+    // - swappable slots only
+    // - not owned by current user
+    // - not already requested
+    const filteredEvents = allEvents.filter(
+      (ev) =>
+        ev.swappable &&
+        ev.userId !== currentUserId &&
+        !outgoing.some((req: { requestedSlot: string }) => req.requestedSlot === ev.id)
+    );
+
+    // 5. Map usernames
+    const namesCache = { ...userCache };
+    const eventsMapped = await Promise.all(
+      filteredEvents.map(async (ev) => {
+        if (!namesCache[ev.userId]) {
+          try {
+            const userRes = await fetchUserById(ev.userId);
+            namesCache[ev.userId] = userRes.data?.name || "Unknown User";
+          } catch {
+            namesCache[ev.userId] = "Unknown User";
           }
-          return { ...ev, userName: namesCache[ev.userId] };
-        })
-      );
+        }
+        return { ...ev, userName: namesCache[ev.userId] };
+      })
+    );
 
-      setUserCache(namesCache);
-      setEventsWithNames(eventsMapped);
-      await dispatch(fetchSwapRequests(currentUserId)); // refresh requests
-    };
+    setUserCache(namesCache);
+    setEventsWithNames(eventsMapped);
+  };
 
+  useEffect(() => {
     loadMarketplace();
   }, [dispatch, currentUserId]);
 
-  const handleRequestSwap = (toSlotId: string) => {
+  // Handle swap request
+  const handleRequestSwap = async (requestedSlotId: string) => {
     if (!currentUserId) return;
 
-    const mySlot = myEvents.find(ev => ev.swappable);
-    if (!mySlot) {
-      alert("You have no swappable slots!");
+    // Find swappable slot owned by current user
+    const mySwappableSlot = myEvents.find(
+      (ev) => ev.swappable && ev.userId === currentUserId
+    );
+    if (!mySwappableSlot) {
+      alert("You have no swappable slots to offer!");
       return;
     }
 
-    setLoadingSwap(true);
-    dispatch(createSwapRequest({
+    const payload = {
       requesterId: currentUserId,
-      eventId: toSlotId,
-      requestedSlot: toSlotId,
-      offeredSlot: mySlot.id
-    }))
-      .then(() => {
-        alert("Swap request sent to the owner!");
-        // Refresh marketplace & my events after sending request
-        dispatch(fetchMyEvents(currentUserId));
-        dispatch(fetchMarketplace(currentUserId));
-        dispatch(fetchSwapRequests(currentUserId));
-      })
-      .finally(() => setLoadingSwap(false));
+      requestedSlot: requestedSlotId,
+      offeredSlot: mySwappableSlot.id,
+      eventId: requestedSlotId,
+    };
+
+    setLoadingSwap(true);
+    try {
+      await dispatch(createSwapRequest(payload)).unwrap();
+      alert("Swap request sent!");
+      await loadMarketplace();
+    } catch (err: any) {
+      console.error("Swap request failed:", err);
+      alert(
+        err.response?.data?.message ||
+          "Swap request failed. Make sure you have a swappable slot and valid token."
+      );
+    } finally {
+      setLoadingSwap(false);
+    }
   };
 
   return (
@@ -83,10 +123,16 @@ export default function Marketplace() {
           <div>Loading...</div>
         ) : (
           <div className="grid gap-4">
-            {eventsWithNames.map(slot => (
+            {eventsWithNames.length === 0 && (
+              <div className="text-gray-500">No available swaps</div>
+            )}
+            {eventsWithNames.map((slot) => (
               <EventCard key={slot.id} ev={slot} statusColor="#e0f7fa" showTitle={false}>
                 <div className="font-bold">{slot.userName}</div>
-                <div className="text-sm text-gray-600">{slot.startTime} - {slot.endTime}</div>
+                <div className="text-sm text-gray-600">
+                  {formatTime(slot.date, slot.startTime)} -{" "}
+                  {formatTime(slot.date, slot.endTime)}
+                </div>
                 <button
                   disabled={loadingSwap}
                   className="mt-2 px-3 py-1 bg-gradient-to-r from-pink-500 to-red-500 text-white rounded disabled:opacity-50"

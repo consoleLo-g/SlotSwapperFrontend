@@ -15,16 +15,25 @@ export default function EventCard({
   className,
   statusColor,
   children,
-  showTitle = true
+  showTitle = true,
 }: EventCardProps) {
-  const startDate = new Date(`${ev.date}T${ev.startTime}`);
-  const endDate = new Date(`${ev.date}T${ev.endTime}`);
+  const formatTime = (dateStr?: string, timeStr?: string) => {
+    if (!dateStr || !timeStr) return "N/A";
+    const d = new Date(`${dateStr}T${timeStr}`);
+    return isNaN(d.getTime()) ? "N/A" : d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  };
+
+  const startTime = formatTime(ev.date, ev.startTime);
+  const endTime = formatTime(ev.date, ev.endTime);
 
   return (
-    <div className={`p-3 rounded-lg shadow ${className ?? ""}`} style={{ backgroundColor: statusColor ?? "#fff" }}>
+    <div
+      className={`p-3 rounded-lg shadow ${className ?? ""}`}
+      style={{ backgroundColor: statusColor ?? "#fff" }}
+    >
       {showTitle && <h3 className="font-semibold text-lg">{ev.title}</h3>}
       <p className="text-gray-700 text-sm">
-        {startDate.toLocaleTimeString()} - {endDate.toLocaleTimeString()}
+        {startTime} - {endTime}
       </p>
 
       {!ev.swappable && onMakeSwappable && (

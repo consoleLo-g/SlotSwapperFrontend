@@ -1,4 +1,3 @@
-// src/Components/SwapModal.tsx
 import React, { useState } from "react";
 
 interface SwapModalProps {
@@ -30,7 +29,7 @@ export default function SwapModal({ open, onClose, marketplaceSlot, mySwappables
           <option value="">Select your slot</option>
           {mySwappables.map((s) => (
             <option key={s.id} value={s.id}>
-              {s.title} ({new Date(s.start).toLocaleString()})
+              {s.title} ({s.date} {s.startTime}-{s.endTime})
             </option>
           ))}
         </select>

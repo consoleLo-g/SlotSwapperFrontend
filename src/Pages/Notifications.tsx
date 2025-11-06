@@ -1,25 +1,80 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import NavBar from "../Components/NavBar";
 import { useAppDispatch, useAppSelector } from "../hooks";
-import { fetchSwapRequests, respondSwapRequest } from "../Store/swapSlice";
+import {
+  fetchSwapRequests,
+  respondSwapRequest,
+  fetchMarketplace,
+  fetchMyEvents,
+} from "../Store/swapSlice";
+import { fetchUserById } from "../api/userApi";
 
 export default function Notifications() {
   const dispatch = useAppDispatch();
   const currentUser = useAppSelector((s) => s.auth.user);
-  const incoming = useAppSelector((s) => s.swap.incoming);
-  const outgoing = useAppSelector((s) => s.swap.outgoing);
+
+  const [incomingWithNames, setIncomingWithNames] = useState<any[]>([]);
+  const [outgoingWithNames, setOutgoingWithNames] = useState<any[]>([]);
+  const [userCache, setUserCache] = useState<Record<string, string>>({});
+
+  const enrichRequestsWithNames = async (requests: any[]) => {
+    const namesCache = { ...userCache };
+    const enriched = await Promise.all(
+      requests.map(async (r) => {
+        if (!namesCache[r.requesterId]) {
+          try {
+            const res = await fetchUserById(r.requesterId);
+            namesCache[r.requesterId] = res.data?.name || "Unknown User";
+          } catch {
+            namesCache[r.requesterId] = "Unknown User";
+          }
+        }
+
+        if (!namesCache[r.requestedSlotOwnerId]) {
+          try {
+            const res = await fetchUserById(r.requestedSlotOwnerId);
+            namesCache[r.requestedSlotOwnerId] = res.data?.name || "Unknown User";
+          } catch {
+            namesCache[r.requestedSlotOwnerId] = "Unknown User";
+          }
+        }
+
+        return {
+          ...r,
+          fromUserName: namesCache[r.requesterId],
+          toUserName: namesCache[r.requestedSlotOwnerId],
+        };
+      })
+    );
+
+    setUserCache(namesCache);
+    return enriched;
+  };
+
+  const loadRequests = async () => {
+    if (!currentUser?.id) return;
+
+    const { incoming, outgoing } = await dispatch(fetchSwapRequests(currentUser.id)).unwrap();
+    setIncomingWithNames(await enrichRequestsWithNames(incoming));
+    setOutgoingWithNames(await enrichRequestsWithNames(outgoing));
+  };
 
   useEffect(() => {
-    if (currentUser?.id) {
-      dispatch(fetchSwapRequests(currentUser.id));
-    }
+    loadRequests();
   }, [dispatch, currentUser]);
 
-  const handleRespond = (id: string, accept: boolean) => {
+  const handleRespond = async (id: string, accept: boolean) => {
     if (!currentUser?.id) return;
-    dispatch(respondSwapRequest({ id, accept })).then(() =>
-      dispatch(fetchSwapRequests(currentUser.id)) // ✅ Refresh both incoming and outgoing after responding
-    );
+
+    try {
+      await dispatch(respondSwapRequest({ id, accept })).unwrap();
+      // Refresh notifications & marketplace
+      await loadRequests();
+      await dispatch(fetchMyEvents(currentUser.id));
+      await dispatch(fetchMarketplace(currentUser.id));
+    } catch (err) {
+      console.error("Failed to respond:", err);
+    }
   };
 
   return (
@@ -30,18 +85,33 @@ export default function Notifications() {
         <section>
           <h2 className="text-xl font-semibold mb-3">Incoming Requests</h2>
           <div className="space-y-3">
-            {incoming.length === 0 ? (
-              <div className="text-gray-500">No incoming</div>
+            {incomingWithNames.length === 0 ? (
+              <div className="text-gray-500">No incoming requests</div>
             ) : (
-              incoming.map(r => (
-                <div key={r.id} className="p-3 bg-white/90 rounded shadow flex justify-between items-center">
+              incomingWithNames.map((r) => (
+                <div
+                  key={r.id}
+                  className="p-3 bg-white/90 rounded shadow flex justify-between items-center"
+                >
                   <div>
-                    <div className="font-bold">{r.fromUserName || r.requesterId} offers swap</div>
-                    <div className="text-sm text-gray-600">{new Date(r.createdAt).toLocaleString()}</div>
+                    <div className="font-bold">{r.fromUserName} offers swap</div>
+                    <div className="text-sm text-gray-600">
+                      {new Date(r.createdAt).toLocaleString()}
+                    </div>
                   </div>
                   <div className="flex gap-2">
-                    <button className="px-2 py-1 bg-green-600 text-white rounded" onClick={() => handleRespond(r.id, true)}>Accept</button>
-                    <button className="px-2 py-1 border rounded" onClick={() => handleRespond(r.id, false)}>Reject</button>
+                    <button
+                      className="px-2 py-1 bg-green-600 text-white rounded"
+                      onClick={() => handleRespond(r.id, true)}
+                    >
+                      Accept
+                    </button>
+                    <button
+                      className="px-2 py-1 border rounded"
+                      onClick={() => handleRespond(r.id, false)}
+                    >
+                      Reject
+                    </button>
                   </div>
                 </div>
               ))
@@ -53,12 +123,12 @@ export default function Notifications() {
         <section>
           <h2 className="text-xl font-semibold mb-3">Outgoing Requests</h2>
           <div className="space-y-3">
-            {outgoing.length === 0 ? (
-              <div className="text-gray-500">No outgoing</div>
+            {outgoingWithNames.length === 0 ? (
+              <div className="text-gray-500">No outgoing requests</div>
             ) : (
-              outgoing.map(r => (
+              outgoingWithNames.map((r) => (
                 <div key={r.id} className="p-3 bg-white/90 rounded shadow">
-                  <div className="font-bold">To: {r.toUserName || r.requestedSlotOwnerId}</div>
+                  <div className="font-bold">To: {r.toUserName}</div>
                   <div className="text-sm text-gray-600">{r.status}</div>
                 </div>
               ))
