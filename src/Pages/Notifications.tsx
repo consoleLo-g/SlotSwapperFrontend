@@ -9,6 +9,7 @@ import {
   fetchMyEvents,
 } from "../Store/swapSlice";
 import { fetchUserById } from "../api/userApi";
+import type { SwapRequest } from "../Types/Swap";
 
 export default function Notifications() {
   const dispatch = useAppDispatch();
@@ -18,50 +19,55 @@ export default function Notifications() {
   const [outgoingWithNames, setOutgoingWithNames] = useState<any[]>([]);
   const [userCache, setUserCache] = useState<Record<string, string>>({});
 
-  // ----------------- Enrich requests with user names -----------------
-  const enrichRequestsWithNames = async (requests: any[]) => {
+  // ----------------- Enrich swap requests with user names -----------------
+  const enrichRequestsWithNames = async (requests: SwapRequest[]) => {
     if (!requests.length) return [];
 
     const namesCache = { ...userCache };
-
-    // 1️⃣ Fetch all events once
     const events = await getAllEventsApi();
     const eventsMap = Object.fromEntries(events.map((e: any) => [e.id, e]));
 
-    // 2️⃣ Enrich each request
     const enriched = await Promise.all(
       requests.map(async (r) => {
-        // a) requester name
-        if (!namesCache[r.requesterId]) {
+        // Use backend id directly
+        const backendId = r.id;
+        const reactKey = backendId || Math.random().toString();
+
+        const createdAt = r.createdAt || new Date().toISOString();
+
+        // requester name
+        const fromUserId = r.fromUserId;
+        if (!namesCache[fromUserId]) {
           try {
-            const res = await fetchUserById(r.requesterId);
-            namesCache[r.requesterId] = res.data?.name || "Unknown User";
+            const res = await fetchUserById(fromUserId);
+            namesCache[fromUserId] = res.data?.name || "Unknown User";
           } catch {
-            namesCache[r.requesterId] = "Unknown User";
+            namesCache[fromUserId] = "Unknown User";
           }
         }
 
-        // b) owner of requested slot
-        const requestedEvent = eventsMap[r.requestedSlot];
+        // target event owner
+        const requestedEvent = eventsMap[r.requestedEventId];
+        let toUserId = "";
         if (requestedEvent) {
-          const ownerId = requestedEvent.userId;
-          if (!namesCache[ownerId]) {
+          toUserId = requestedEvent.userId;
+          if (!namesCache[toUserId]) {
             try {
-              const res = await fetchUserById(ownerId);
-              namesCache[ownerId] = res.data?.name || "Unknown User";
+              const res = await fetchUserById(toUserId);
+              namesCache[toUserId] = res.data?.name || "Unknown User";
             } catch {
-              namesCache[ownerId] = "Unknown User";
+              namesCache[toUserId] = "Unknown User";
             }
           }
-          namesCache[r.requestedSlot] = namesCache[ownerId];
-        } else {
-          namesCache[r.requestedSlot] = "Unknown User";
         }
 
         return {
           ...r,
-          fromUserName: namesCache[r.requesterId],
-          toUserName: namesCache[r.requestedSlot],
+          _backendId: backendId,
+          _reactKey: reactKey,
+          createdAt,
+          fromUserName: namesCache[fromUserId],
+          toUserName: namesCache[toUserId] || "Unknown User",
         };
       })
     );
@@ -88,12 +94,13 @@ export default function Notifications() {
   }, [dispatch, currentUser]);
 
   // ----------------- Respond to swap -----------------
-  const handleRespond = async (id: string, accept: boolean) => {
-    if (!currentUser?.id) return;
+  const handleRespond = async (backendId: string, accept: boolean) => {
+    if (!currentUser?.id || !backendId) return;
 
     try {
-      await dispatch(respondSwapRequest({ id, accept })).unwrap();
-      // Refresh notifications & marketplace
+      await dispatch(respondSwapRequest({ id: backendId, accept })).unwrap();
+
+      // Refresh requests & events
       await loadRequests();
       await dispatch(fetchMyEvents(currentUser.id));
       await dispatch(fetchMarketplace(currentUser.id));
@@ -116,24 +123,26 @@ export default function Notifications() {
             ) : (
               incomingWithNames.map((r) => (
                 <div
-                  key={r.id}
+                  key={r._reactKey}
                   className="p-3 bg-white/90 rounded shadow flex justify-between items-center"
                 >
                   <div>
-                    <div className="font-bold">{r.fromUserName} offers swap</div>
+                    <div className="font-bold">
+                      {r.fromUserName} offers swap
+                    </div>
                     <div className="text-sm text-gray-600">
-                      {new Date(r.createdAt).toLocaleString()}
+                      {r.createdAt ? new Date(r.createdAt).toLocaleString() : "Unknown Date"}
                     </div>
                   </div>
                   <div className="flex gap-2">
                     <button
-                      className="px-2 py-1 bg-green-600 text-white rounded"
+                      className="px-2 py-1 rounded bg-green-600 text-white"
                       onClick={() => handleRespond(r.id, true)}
                     >
                       Accept
                     </button>
                     <button
-                      className="px-2 py-1 border rounded"
+                      className="px-2 py-1 rounded border"
                       onClick={() => handleRespond(r.id, false)}
                     >
                       Reject
@@ -153,9 +162,14 @@ export default function Notifications() {
               <div className="text-gray-500">No outgoing requests</div>
             ) : (
               outgoingWithNames.map((r) => (
-                <div key={r.id} className="p-3 bg-white/90 rounded shadow">
-                  <div className="font-bold">To: {r.toUserName}</div>
-                  <div className="text-sm text-gray-600">{r.status}</div>
+                <div
+                  key={r._reactKey}
+                  className="p-3 bg-white/90 rounded shadow flex justify-between items-center"
+                >
+                  <div>
+                    <div className="font-bold">To: {r.toUserName}</div>
+                    <div className="text-sm text-gray-600">{r.status}</div>
+                  </div>
                 </div>
               ))
             )}

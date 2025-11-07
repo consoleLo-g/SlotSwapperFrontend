@@ -32,8 +32,11 @@ export const createSwapRequestApi = async ({
   return res.data;
 };
 
-export const respondSwapRequestApi = (payload: { id: string; accept: boolean }) =>
-  api.put(`/swaps/${payload.id}/status?status=${payload.accept ? "ACCEPTED" : "REJECTED"}`);
+export const respondSwapRequestApi = async (payload: { id: string; accept: boolean }) => {
+  const status = payload.accept ? "ACCEPTED" : "REJECTED";
+  const res = await api.put(`/swaps/${payload.id}/status?status=${status}`);
+  return res.data; // ✅ must return data
+};
 
 export const getAllSwapRequestsApi = async () => {
   const res = await api.get("/swaps/all");
