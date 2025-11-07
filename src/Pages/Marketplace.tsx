@@ -81,7 +81,7 @@ const filteredEvents = allEvents.filter((ev) =>
             namesCache[ev.userId] = "Unknown User";
           }
         }
-        return { ...ev, userName: namesCache[ev.userId] };
+        return { ...ev, userName: namesCache[ev.userId], ownerId: ev.userId };
       })
     );
 
@@ -92,42 +92,43 @@ const filteredEvents = allEvents.filter((ev) =>
   useEffect(() => {
     loadMarketplace();
   }, [dispatch, currentUserId]);
+// console.log("TOKEN IN STORAGE:", localStorage.getItem("token"));
 
   // Handle swap request
-  const handleRequestSwap = async (requestedSlotId: string) => {
-    if (!currentUserId) return;
+  const handleRequestSwap = async (slot: any) => {
+  if (!currentUserId) return;
 
-    // Find swappable slot owned by current user
-    const mySwappableSlot = myEvents.find(
-      (ev) => ev.swappable && ev.userId === currentUserId
+  const mySwappableSlot = myEvents.find(
+    (ev) => ev.swappable && ev.userId === currentUserId
+  );
+  if (!mySwappableSlot) {
+    alert("You have no swappable slots to offer!");
+    return;
+  }
+
+  const payload = {
+  requesterId: currentUserId,
+  eventId: slot.id,         // requested event (same as requestedSlot)
+  requestedSlot: slot.id,
+  offeredSlot: mySwappableSlot.id
+};
+  console.log("SENDING PAYLOAD:", payload);
+  
+  setLoadingSwap(true);
+  try {
+    await dispatch(createSwapRequest(payload)).unwrap();
+    alert("Swap request sent!");
+    await loadMarketplace();
+  } catch (err: any) {
+    console.error("Swap request failed:", err);
+    alert(
+      err.response?.data?.message ||
+        "Swap request failed. Make sure you have a swappable slot and valid token."
     );
-    if (!mySwappableSlot) {
-      alert("You have no swappable slots to offer!");
-      return;
-    }
-
-    const payload = {
-      requesterId: currentUserId,
-      requestedSlot: requestedSlotId,
-      offeredSlot: mySwappableSlot.id,
-      eventId: requestedSlotId,
-    };
-
-    setLoadingSwap(true);
-    try {
-      await dispatch(createSwapRequest(payload)).unwrap();
-      alert("Swap request sent!");
-      await loadMarketplace();
-    } catch (err: any) {
-      console.error("Swap request failed:", err);
-      alert(
-        err.response?.data?.message ||
-          "Swap request failed. Make sure you have a swappable slot and valid token."
-      );
-    } finally {
-      setLoadingSwap(false);
-    }
-  };
+  } finally {
+    setLoadingSwap(false);
+  }
+};
 
   return (
     <div>
@@ -151,7 +152,7 @@ const filteredEvents = allEvents.filter((ev) =>
                 <button
                   disabled={loadingSwap}
                   className="mt-2 px-3 py-1 bg-gradient-to-r from-pink-500 to-red-500 text-white rounded disabled:opacity-50"
-                  onClick={() => handleRequestSwap(slot.id)}
+                  onClick={() => handleRequestSwap(slot)}
                 >
                   Request Swap
                 </button>

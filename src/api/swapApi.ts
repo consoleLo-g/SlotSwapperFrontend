@@ -13,12 +13,24 @@ export const getUserEventsApi = async (userId: string) => {
 export const makeEventSwappableApi = (id: string) =>
   api.put(`/events/${id}/make-swappable`);
 
-export const createSwapRequestApi = (payload: {
+export interface CreateSwapRequestDTO {
   requesterId: string;
   eventId: string;
   requestedSlot: string;
   offeredSlot: string;
-}) => api.post("/swaps/request", payload);
+}
+
+export const createSwapRequestApi = async ({
+  requesterId,
+  eventId,
+  requestedSlot,
+  offeredSlot,
+}: CreateSwapRequestDTO) => {
+  const res = await api.post(
+    `/swaps/request?requesterId=${requesterId}&eventId=${eventId}&requestedSlot=${requestedSlot}&offeredSlot=${offeredSlot}`
+  );
+  return res.data;
+};
 
 export const respondSwapRequestApi = (payload: { id: string; accept: boolean }) =>
   api.put(`/swaps/${payload.id}/status?status=${payload.accept ? "ACCEPTED" : "REJECTED"}`);

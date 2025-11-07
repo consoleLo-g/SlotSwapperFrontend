@@ -5,7 +5,8 @@ import {
   makeEventSwappableApi,
   createSwapRequestApi,
   respondSwapRequestApi,
-  getAllSwapRequestsApi
+  getAllSwapRequestsApi,
+  type CreateSwapRequestDTO
 } from "../api/swapApi";
 import { fetchUserById } from "../api/userApi";
 import type { AppEvent } from "../Types/Event";
@@ -38,7 +39,6 @@ const attachUsernames = async (events: any[]) => {
 // ---------------------- THUNKS ----------------------
 
 // Fetch marketplace events
-// ✅ FINAL Marketplace Thunk (Today + Future Only)
 export const fetchMarketplace = createAsyncThunk(
   "swap/fetchMarketplace",
   async (currentUserId: string) => {
@@ -136,7 +136,7 @@ export const makeEventSwappable = createAsyncThunk("swap/makeSwappable", async (
 // Create a swap request
 export const createSwapRequest = createAsyncThunk(
   "swap/createRequest",
-  async (payload: { requesterId: string; eventId: string; requestedSlot: string; offeredSlot: string }) => {
+  async (payload: CreateSwapRequestDTO) => {
     return await createSwapRequestApi(payload);
   }
 );
@@ -145,33 +145,43 @@ export const createSwapRequest = createAsyncThunk(
 export const fetchSwapRequests = createAsyncThunk(
   "swap/fetchRequests",
   async (currentUserId: string) => {
-    const allRequests = await getAllSwapRequestsApi();
+    const requests = await getAllSwapRequestsApi();
 
-    const incomingRaw = allRequests.filter((r: any) => r.requestedSlotOwnerId === currentUserId);
-    const outgoingRaw = allRequests.filter((r: any) => r.requesterId === currentUserId);
+    // incoming = requests where *requestedSlot belongs to me*
+    const incomingRaw = requests.filter((r: any) =>
+      r.requestedSlotOwnerId === currentUserId
+    );
 
-    // Attach usernames to requesterId and requestedSlotOwnerId
+    // outgoing = requests I created
+    const outgoingRaw = requests.filter((r: any) =>
+      r.requesterId === currentUserId
+    );
+
     const cache: Record<string, string> = {};
-    const enrich = async (arr: any[], key: string) =>
-      Promise.all(arr.map(async (r) => {
-        const id = r[key];
-        if (!cache[id]) {
-          try {
-            const res = await fetchUserById(id);
-            cache[id] = res.data?.name || "Unknown User";
-          } catch {
-            cache[id] = "Unknown User";
+
+    const enrich = async (arr: any[], userKey: string) =>
+      Promise.all(
+        arr.map(async (req) => {
+          const uid = req[userKey];
+          if (!cache[uid]) {
+            try {
+              const resp = await fetchUserById(uid);
+              cache[uid] = resp.data?.name || "Unknown User";
+            } catch {
+              cache[uid] = "Unknown User";
+            }
           }
-        }
-        return { ...r, [`${key}Name`]: cache[id] };
-      }));
+          return { ...req, [`${userKey}Name`]: cache[uid] };
+        })
+      );
 
     return {
       incoming: await enrich(incomingRaw, "requesterId"),
-      outgoing: await enrich(outgoingRaw, "requestedSlotOwnerId")
+      outgoing: await enrich(outgoingRaw, "requesterId")
     };
   }
 );
+
 
 // Respond to swap request
 export const respondSwapRequest = createAsyncThunk(
