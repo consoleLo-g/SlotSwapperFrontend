@@ -2,6 +2,7 @@
 export type EventStatus = "BUSY" | "SWAPPABLE" | "CONFIRMED";
 
 export interface AppEvent {
+  requesterId: boolean;
   id: string;
   userId: string;
   title: string;

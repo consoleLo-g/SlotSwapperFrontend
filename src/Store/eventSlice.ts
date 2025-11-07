@@ -17,23 +17,21 @@ export const fetchEvents = createAsyncThunk("events/fetchAll", async () => {
   const res = await fetchMyEventsApi(userId);
 
   // ✅ Convert backend format → frontend format
- return res.data.map((e: any) => ({
+return res.data.map((e: any) => ({
   id: e._id || e.id,
   title: e.title,
   description: e.description,
   swappable: e.swappable,
   userId: e.userId,
+  requesterId: e.requesterId || undefined, // ✅ add this
 
-  // frontend ISO format
   start: new Date(`${e.date}T${e.startTime}`).toISOString(),
   end: new Date(`${e.date}T${e.endTime}`).toISOString(),
 
-  // ✅ keep backend fields
   date: e.date,
   startTime: e.startTime,
   endTime: e.endTime,
 }));
-
 });
 
 // Create a new event
@@ -105,21 +103,22 @@ const slice = createSlice({
   const e = action.payload;
 
   state.items.push({
-    id: e.id,
-    title: e.title,
-    description: e.description,
-    swappable: e.swappable,
-    userId: e.userId,
+  id: e.id,
+  title: e.title,
+  description: e.description,
+  swappable: e.swappable,
+  userId: e.userId,
+  requesterId: e.requesterId || undefined, // ✅ add this
 
-    // ✅ Convert backend fields → ISO
-    start: new Date(`${e.date}T${e.startTime}`).toISOString(),
-    end: new Date(`${e.date}T${e.endTime}`).toISOString(),
+  start: new Date(`${e.date}T${e.startTime}`).toISOString(),
+  end: new Date(`${e.date}T${e.endTime}`).toISOString(),
 
-    date: e.date,
-    startTime: e.startTime,
-    endTime: e.endTime,
-  });
+  date: e.date,
+  startTime: e.startTime,
+  endTime: e.endTime,
 });
+    });
+
 
     // Make swappable
     builder.addCase(makeSwappable.fulfilled, (state, action) => {

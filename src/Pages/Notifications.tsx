@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import NavBar from "../Components/NavBar";
 import { useAppDispatch, useAppSelector } from "../hooks";
+import { getAllEventsApi } from "../api/swapApi";
 import {
   fetchSwapRequests,
   respondSwapRequest,
@@ -17,10 +18,20 @@ export default function Notifications() {
   const [outgoingWithNames, setOutgoingWithNames] = useState<any[]>([]);
   const [userCache, setUserCache] = useState<Record<string, string>>({});
 
+  // ----------------- Enrich requests with user names -----------------
   const enrichRequestsWithNames = async (requests: any[]) => {
+    if (!requests.length) return [];
+
     const namesCache = { ...userCache };
+
+    // 1️⃣ Fetch all events once
+    const events = await getAllEventsApi();
+    const eventsMap = Object.fromEntries(events.map((e: any) => [e.id, e]));
+
+    // 2️⃣ Enrich each request
     const enriched = await Promise.all(
       requests.map(async (r) => {
+        // a) requester name
         if (!namesCache[r.requesterId]) {
           try {
             const res = await fetchUserById(r.requesterId);
@@ -30,19 +41,27 @@ export default function Notifications() {
           }
         }
 
-        if (!namesCache[r.requestedSlotOwnerId]) {
-          try {
-            const res = await fetchUserById(r.requestedSlotOwnerId);
-            namesCache[r.requestedSlotOwnerId] = res.data?.name || "Unknown User";
-          } catch {
-            namesCache[r.requestedSlotOwnerId] = "Unknown User";
+        // b) owner of requested slot
+        const requestedEvent = eventsMap[r.requestedSlot];
+        if (requestedEvent) {
+          const ownerId = requestedEvent.userId;
+          if (!namesCache[ownerId]) {
+            try {
+              const res = await fetchUserById(ownerId);
+              namesCache[ownerId] = res.data?.name || "Unknown User";
+            } catch {
+              namesCache[ownerId] = "Unknown User";
+            }
           }
+          namesCache[r.requestedSlot] = namesCache[ownerId];
+        } else {
+          namesCache[r.requestedSlot] = "Unknown User";
         }
 
         return {
           ...r,
           fromUserName: namesCache[r.requesterId],
-          toUserName: namesCache[r.requestedSlotOwnerId],
+          toUserName: namesCache[r.requestedSlot],
         };
       })
     );
@@ -51,18 +70,24 @@ export default function Notifications() {
     return enriched;
   };
 
+  // ----------------- Load requests -----------------
   const loadRequests = async () => {
     if (!currentUser?.id) return;
 
-    const { incoming, outgoing } = await dispatch(fetchSwapRequests(currentUser.id)).unwrap();
-    setIncomingWithNames(await enrichRequestsWithNames(incoming));
-    setOutgoingWithNames(await enrichRequestsWithNames(outgoing));
+    try {
+      const { incoming, outgoing } = await dispatch(fetchSwapRequests(currentUser.id)).unwrap();
+      setIncomingWithNames(await enrichRequestsWithNames(incoming));
+      setOutgoingWithNames(await enrichRequestsWithNames(outgoing));
+    } catch (err) {
+      console.error("Failed to load requests:", err);
+    }
   };
 
   useEffect(() => {
     loadRequests();
   }, [dispatch, currentUser]);
 
+  // ----------------- Respond to swap -----------------
   const handleRespond = async (id: string, accept: boolean) => {
     if (!currentUser?.id) return;
 
@@ -77,6 +102,7 @@ export default function Notifications() {
     }
   };
 
+  // ----------------- Render -----------------
   return (
     <div>
       <NavBar />
