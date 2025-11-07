@@ -127,7 +127,7 @@ export default function Marketplace() {
               <div className="text-gray-500">No available swaps</div>
             )}
             {eventsWithNames.map((slot) => (
-              <EventCard key={slot.id} ev={slot} statusColor="#e0f7fa" showTitle={false}>
+              <EventCard key={slot.id} ev={slot} statusColor="#e0f7fa" showTitle={false} hideTime={true} >
                 <div className="font-bold">{slot.userName}</div>
                 <div className="text-sm text-gray-600">
                   {formatTime(slot.date, slot.startTime)} -{" "}

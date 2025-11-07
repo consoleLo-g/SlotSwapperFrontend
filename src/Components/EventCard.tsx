@@ -7,6 +7,7 @@ interface EventCardProps {
   statusColor?: string;
   children?: React.ReactNode;
   showTitle?: boolean;
+  hideTime?: boolean;
 }
 
 export default function EventCard({
@@ -16,12 +17,22 @@ export default function EventCard({
   statusColor,
   children,
   showTitle = true,
+  hideTime,
 }: EventCardProps) {
   const formatTime = (dateStr?: string, timeStr?: string) => {
-    if (!dateStr || !timeStr) return "N/A";
-    const d = new Date(`${dateStr}T${timeStr}`);
-    return isNaN(d.getTime()) ? "N/A" : d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-  };
+  if (!dateStr || !timeStr) return "N/A";
+
+  const [hours, minutes] = timeStr.split(":").map(Number);
+
+  const d = new Date(dateStr);
+  d.setHours(hours, minutes, 0, 0);
+
+  return d.toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+};
+
 
   const startTime = formatTime(ev.date, ev.startTime);
   const endTime = formatTime(ev.date, ev.endTime);
@@ -32,9 +43,12 @@ export default function EventCard({
       style={{ backgroundColor: statusColor ?? "#fff" }}
     >
       {showTitle && <h3 className="font-semibold text-lg">{ev.title}</h3>}
-      <p className="text-gray-700 text-sm">
-        {startTime} - {endTime}
-      </p>
+      {!hideTime && (
+  <p className="text-gray-700 text-sm">
+    {startTime} - {endTime}
+  </p>
+)}
+
 
       {!ev.swappable && onMakeSwappable && (
         <button

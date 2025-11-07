@@ -17,17 +17,23 @@ export const fetchEvents = createAsyncThunk("events/fetchAll", async () => {
   const res = await fetchMyEventsApi(userId);
 
   // ✅ Convert backend format → frontend format
-  return res.data.map((e: any) => ({
-    id: e.id,
-    title: e.title,
-    description: e.description,
-    swappable: e.swappable,
-    userId: e.userId,
+ return res.data.map((e: any) => ({
+  id: e._id || e.id,
+  title: e.title,
+  description: e.description,
+  swappable: e.swappable,
+  userId: e.userId,
 
-    // ✅ Build ISO datetime string
-    start: new Date(`${e.date}T${e.startTime}`).toISOString(),
-    end: new Date(`${e.date}T${e.endTime}`).toISOString(),
-  })) as AppEvent[];
+  // frontend ISO format
+  start: new Date(`${e.date}T${e.startTime}`).toISOString(),
+  end: new Date(`${e.date}T${e.endTime}`).toISOString(),
+
+  // ✅ keep backend fields
+  date: e.date,
+  startTime: e.startTime,
+  endTime: e.endTime,
+}));
+
 });
 
 // Create a new event
