@@ -38,16 +38,88 @@ const attachUsernames = async (events: any[]) => {
 // ---------------------- THUNKS ----------------------
 
 // Fetch marketplace events
+// ✅ FINAL Marketplace Thunk (Today + Future Only)
 export const fetchMarketplace = createAsyncThunk(
   "swap/fetchMarketplace",
   async (currentUserId: string) => {
-    const allEvents = await getAllEventsApi();
-    const swappable = allEvents.filter(
-      (ev: any) => ev.swappable && ev.userId !== currentUserId
+    const res: any = await getAllEventsApi();
+
+    // Support both axios and raw array
+    const rawEvents: any[] = Array.isArray(res) ? res : res?.data ?? [];
+
+    const now = new Date();
+
+    const normalize = (ev: any) => {
+      const id = ev._id ?? ev.id;
+
+      const date = ev.date || (ev.start?.split("T")[0] ?? "");
+      const startTime = ev.startTime || ev.start?.split("T")[1]?.substring(0, 5) || "";
+      const endTime = ev.endTime || ev.end?.split("T")[1]?.substring(0, 5) || "";
+
+      const isoStart = ev.start || (date && startTime ? `${date}T${startTime}` : null);
+      const startObj = isoStart ? new Date(isoStart) : null;
+
+      return {
+        ...ev,
+        id,
+        swappable: !!ev.swappable,
+        date,
+        startTime,
+        endTime,
+        start: isoStart,
+        _startObj: startObj,
+      };
+    };
+
+    const isFutureOrTodaySlot = (ev: any) => {
+      if (!ev._startObj || isNaN(ev._startObj.getTime())) return false;
+
+      const eventDate = new Date(ev.date);
+      const today = new Date(now.toDateString()); // zero-out time
+
+      // Future date → show
+      if (eventDate > today) return true;
+
+      // Today → only show if start time is still upcoming
+      if (eventDate.getTime() === today.getTime()) {
+        return ev._startObj >= now;
+      }
+
+      // Past date → hide
+      return false;
+    };
+
+    // ✅ FILTER
+    const candidate = rawEvents
+      .map(normalize)
+      .filter((ev: any) => {
+        if (!ev.swappable) return false;
+        if (String(ev.userId) === String(currentUserId)) return false;
+        if (!isFutureOrTodaySlot(ev)) return false;
+        return true;
+      });
+
+    // ✅ Attach usernames
+    const cache: Record<string, string> = {};
+    const enriched = await Promise.all(
+      candidate.map(async (ev) => {
+        if (!cache[ev.userId]) {
+          try {
+            const r = await fetchUserById(ev.userId);
+            cache[ev.userId] = r.data?.name ?? "Unknown User";
+          } catch {
+            cache[ev.userId] = "Unknown User";
+          }
+        }
+
+        const { _startObj, ...cleaned } = ev;
+        return { ...cleaned, userName: cache[ev.userId] };
+      })
     );
-    return await attachUsernames(swappable);
+    return enriched as AppEvent[];
   }
 );
+
 
 // Fetch my events
 export const fetchMyEvents = createAsyncThunk("swap/fetchMyEvents", async (userId: string) => {

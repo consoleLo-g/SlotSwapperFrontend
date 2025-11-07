@@ -43,17 +43,32 @@ export default function Marketplace() {
     // 3. Fetch all marketplace events
     const allEvents: any[] = await dispatch(fetchMarketplace(currentUserId)).unwrap();
 
+
     // 4. Filter:
     // - swappable slots only
     // - not owned by current user
     // - not already requested
-    const filteredEvents = allEvents.filter(
-      (ev) =>
-        ev.swappable &&
-        ev.userId !== currentUserId &&
-        !outgoing.some((req: { requestedSlot: string }) => req.requestedSlot === ev.id)
-    );
+    const now = new Date();
 
+const isFutureOrTodaySlot = (ev: any) => {
+  const eventDate = new Date(ev.date);
+  const eventStart = new Date(`${ev.date}T${ev.startTime}`);
+
+  const today = new Date(now.toDateString()); // removes time part
+
+  return (
+    eventDate > today ||              // future date ✅ show
+    (eventDate.getTime() === today.getTime() &&
+     eventStart >= now)               // today but not passed ✅ show
+  );
+};
+
+const filteredEvents = allEvents.filter((ev) =>
+  ev.swappable &&
+  ev.userId !== currentUserId &&
+  isFutureOrTodaySlot(ev) &&
+  !outgoing.some((req: any) => req.requestedSlot === ev.id)
+);
     // 5. Map usernames
     const namesCache = { ...userCache };
     const eventsMapped = await Promise.all(
