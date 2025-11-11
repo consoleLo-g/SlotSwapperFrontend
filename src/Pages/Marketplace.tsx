@@ -21,7 +21,7 @@ export default function Marketplace() {
   const [userCache, setUserCache] = useState<Record<string, string>>({});
   const [loadingSwap, setLoadingSwap] = useState(false);
 
-  // Format date/time
+  // Format time nicely
   const formatTime = (dateStr: string, timeStr: string) => {
     if (!dateStr || !timeStr) return "N/A";
     const d = new Date(`${dateStr}T${timeStr}`);
@@ -30,46 +30,31 @@ export default function Marketplace() {
       : d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   };
 
-  // Load marketplace events
+  // Load marketplace
   const loadMarketplace = async () => {
     if (!currentUserId) return;
 
-    // 1. Fetch my events
     await dispatch(fetchMyEvents(currentUserId));
-
-    // 2. Fetch swap requests
     await dispatch(fetchSwapRequests(currentUserId));
-
-    // 3. Fetch all marketplace events
     const allEvents: any[] = await dispatch(fetchMarketplace(currentUserId)).unwrap();
 
-
-    // 4. Filter:
-    // - swappable slots only
-    // - not owned by current user
-    // - not already requested
     const now = new Date();
+    const today = new Date(now.toDateString());
 
-const isFutureOrTodaySlot = (ev: any) => {
-  const eventDate = new Date(ev.date);
-  const eventStart = new Date(`${ev.date}T${ev.startTime}`);
+    const isFutureOrTodaySlot = (ev: any) => {
+      const eventDate = new Date(ev.date);
+      const eventStart = new Date(`${ev.date}T${ev.startTime}`);
+      return eventDate > today || (eventDate.getTime() === today.getTime() && eventStart >= now);
+    };
 
-  const today = new Date(now.toDateString()); // removes time part
+    const filteredEvents = allEvents.filter(
+      (ev) =>
+        ev.swappable &&
+        ev.userId !== currentUserId &&
+        isFutureOrTodaySlot(ev) &&
+        !outgoing.some((req: any) => req.requestedEventId === ev.id)
+    );
 
-  return (
-    eventDate > today ||              // future date ✅ show
-    (eventDate.getTime() === today.getTime() &&
-     eventStart >= now)               // today but not passed ✅ show
-  );
-};
-
-const filteredEvents = allEvents.filter((ev) =>
-  ev.swappable &&
-  ev.userId !== currentUserId &&
-  isFutureOrTodaySlot(ev) &&
-  !outgoing.some((req: any) => req.requestedSlot === ev.id)
-);
-    // 5. Map usernames
     const namesCache = { ...userCache };
     const eventsMapped = await Promise.all(
       filteredEvents.map(async (ev) => {
@@ -92,43 +77,36 @@ const filteredEvents = allEvents.filter((ev) =>
   useEffect(() => {
     loadMarketplace();
   }, [dispatch, currentUserId]);
-// console.log("TOKEN IN STORAGE:", localStorage.getItem("token"));
 
   // Handle swap request
   const handleRequestSwap = async (slot: any) => {
-  if (!currentUserId) return;
+    if (!currentUserId) return;
 
-  const mySwappableSlot = myEvents.find(
-    (ev) => ev.swappable && ev.userId === currentUserId
-  );
-  if (!mySwappableSlot) {
-    alert("You have no swappable slots to offer!");
-    return;
-  }
+    const mySwappableSlot = myEvents.find((ev) => ev.swappable && ev.userId === currentUserId);
+    if (!mySwappableSlot) {
+      alert("You have no swappable slots to offer!");
+      return;
+    }
 
-  const payload = {
-  requesterId: currentUserId,
-  eventId: slot.id,         // requested event (same as requestedSlot)
-  requestedSlot: slot.id,
-  offeredSlot: mySwappableSlot.id
-};
-  console.log("SENDING PAYLOAD:", payload);
-  
-  setLoadingSwap(true);
-  try {
-    await dispatch(createSwapRequest(payload)).unwrap();
-    alert("Swap request sent!");
-    await loadMarketplace();
-  } catch (err: any) {
-    console.error("Swap request failed:", err);
-    alert(
-      err.response?.data?.message ||
-        "Swap request failed. Make sure you have a swappable slot and valid token."
-    );
-  } finally {
-    setLoadingSwap(false);
-  }
-};
+    const payload = {
+      requesterId: currentUserId,
+      eventId: slot.id, // requested slot
+      requestedSlot: slot.id,
+      offeredSlot: mySwappableSlot.id,
+    };
+
+    setLoadingSwap(true);
+    try {
+      await dispatch(createSwapRequest(payload)).unwrap();
+      alert("Swap request sent!");
+      await loadMarketplace();
+    } catch (err: any) {
+      console.error("Swap request failed:", err);
+      alert(err.response?.data?.message || "Swap request failed");
+    } finally {
+      setLoadingSwap(false);
+    }
+  };
 
   return (
     <div>
@@ -139,15 +117,12 @@ const filteredEvents = allEvents.filter((ev) =>
           <div>Loading...</div>
         ) : (
           <div className="grid gap-4">
-            {eventsWithNames.length === 0 && (
-              <div className="text-gray-500">No available swaps</div>
-            )}
+            {eventsWithNames.length === 0 && <div className="text-gray-500">No available swaps</div>}
             {eventsWithNames.map((slot) => (
-              <EventCard key={slot.id} ev={slot} statusColor="#e0f7fa" showTitle={false} hideTime={true} >
+              <EventCard key={slot.id} ev={slot} statusColor="#e0f7fa" showTitle={false} hideTime={true}>
                 <div className="font-bold">{slot.userName}</div>
                 <div className="text-sm text-gray-600">
-                  {formatTime(slot.date, slot.startTime)} -{" "}
-                  {formatTime(slot.date, slot.endTime)}
+                  {formatTime(slot.date, slot.startTime)} - {formatTime(slot.date, slot.endTime)}
                 </div>
                 <button
                   disabled={loadingSwap}

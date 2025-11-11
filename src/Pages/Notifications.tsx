@@ -14,12 +14,12 @@ import type { SwapRequest } from "../Types/Swap";
 export default function Notifications() {
   const dispatch = useAppDispatch();
   const currentUser = useAppSelector((s) => s.auth.user);
+  const myEvents = useAppSelector((s) => s.swap.myEvents);
 
   const [incomingWithNames, setIncomingWithNames] = useState<any[]>([]);
   const [outgoingWithNames, setOutgoingWithNames] = useState<any[]>([]);
   const [userCache, setUserCache] = useState<Record<string, string>>({});
 
-  // ----------------- Enrich swap requests with user names -----------------
   const enrichRequestsWithNames = async (requests: SwapRequest[]) => {
     if (!requests.length) return [];
 
@@ -29,13 +29,9 @@ export default function Notifications() {
 
     const enriched = await Promise.all(
       requests.map(async (r) => {
-        // Use backend id directly
         const backendId = r.id;
         const reactKey = backendId || Math.random().toString();
 
-        const createdAt = r.createdAt || new Date().toISOString();
-
-        // requester name
         const fromUserId = r.fromUserId;
         if (!namesCache[fromUserId]) {
           try {
@@ -46,18 +42,14 @@ export default function Notifications() {
           }
         }
 
-        // target event owner
         const requestedEvent = eventsMap[r.requestedEventId];
-        let toUserId = "";
-        if (requestedEvent) {
-          toUserId = requestedEvent.userId;
-          if (!namesCache[toUserId]) {
-            try {
-              const res = await fetchUserById(toUserId);
-              namesCache[toUserId] = res.data?.name || "Unknown User";
-            } catch {
-              namesCache[toUserId] = "Unknown User";
-            }
+        let toUserId = requestedEvent?.userId || "";
+        if (toUserId && !namesCache[toUserId]) {
+          try {
+            const res = await fetchUserById(toUserId);
+            namesCache[toUserId] = res.data?.name || "Unknown User";
+          } catch {
+            namesCache[toUserId] = "Unknown User";
           }
         }
 
@@ -65,7 +57,6 @@ export default function Notifications() {
           ...r,
           _backendId: backendId,
           _reactKey: reactKey,
-          createdAt,
           fromUserName: namesCache[fromUserId],
           toUserName: namesCache[toUserId] || "Unknown User",
         };
@@ -76,13 +67,16 @@ export default function Notifications() {
     return enriched;
   };
 
-  // ----------------- Load requests -----------------
   const loadRequests = async () => {
     if (!currentUser?.id) return;
 
     try {
       const { incoming, outgoing } = await dispatch(fetchSwapRequests(currentUser.id)).unwrap();
-      setIncomingWithNames(await enrichRequestsWithNames(incoming));
+
+      // Only incoming requests for slots owned by current user
+      const filteredIncoming = incoming.filter((r) => myEvents.some((ev) => ev.id === r.requestedEventId));
+
+      setIncomingWithNames(await enrichRequestsWithNames(filteredIncoming));
       setOutgoingWithNames(await enrichRequestsWithNames(outgoing));
     } catch (err) {
       console.error("Failed to load requests:", err);
@@ -91,25 +85,23 @@ export default function Notifications() {
 
   useEffect(() => {
     loadRequests();
-  }, [dispatch, currentUser]);
+  }, [dispatch, currentUser, myEvents]);
 
-  // ----------------- Respond to swap -----------------
   const handleRespond = async (backendId: string, accept: boolean) => {
     if (!currentUser?.id || !backendId) return;
 
     try {
       await dispatch(respondSwapRequest({ id: backendId, accept })).unwrap();
 
-      // Refresh requests & events
-      await loadRequests();
+      // REFRESH events & requests after swap
       await dispatch(fetchMyEvents(currentUser.id));
       await dispatch(fetchMarketplace(currentUser.id));
+      await loadRequests();
     } catch (err) {
       console.error("Failed to respond:", err);
     }
   };
 
-  // ----------------- Render -----------------
   return (
     <div>
       <NavBar />
@@ -127,23 +119,18 @@ export default function Notifications() {
                   className="p-3 bg-white/90 rounded shadow flex justify-between items-center"
                 >
                   <div>
-                    <div className="font-bold">
-                      {r.fromUserName} offers swap
-                    </div>
-                    <div className="text-sm text-gray-600">
-                      {r.createdAt ? new Date(r.createdAt).toLocaleString() : "Unknown Date"}
-                    </div>
+                    <div className="font-bold">{r.fromUserName} offers swap</div>
                   </div>
                   <div className="flex gap-2">
                     <button
                       className="px-2 py-1 rounded bg-green-600 text-white"
-                      onClick={() => handleRespond(r.id, true)}
+                      onClick={() => handleRespond(r._backendId, true)}
                     >
                       Accept
                     </button>
                     <button
                       className="px-2 py-1 rounded border"
-                      onClick={() => handleRespond(r.id, false)}
+                      onClick={() => handleRespond(r._backendId, false)}
                     >
                       Reject
                     </button>
